@@ -1,0 +1,160 @@
+// ─────────────────────────────────────────────
+// 盲盒抽卡应用 - Prisma Schema
+// Database: PostgreSQL
+// ─────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── 枚举 ────────────────────────────────────
+
+/// 稀有度枚举（5级）
+enum Rarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+  SECRET
+}
+
+// ── 模型 ────────────────────────────────────
+
+/// 盲盒系列
+model BoxSeries {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  emoji       String   @default("")
+  description String?
+  totalItems  Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items BoxItem[]
+
+  @@map("box_series")
+}
+
+/// 盲盒卡片
+model BoxItem {
+  id          String   @id @default(uuid())
+  seriesId    String
+  name        String
+  subtitle    String?
+  emoji       String   @default("")
+  imageUrl    String   @default("")
+  rarity      Rarity
+  description String?
+  seriesIndex Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  series       BoxSeries     @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  drawRecords  DrawRecord[]
+  collections  Collection[]
+  shareRecords ShareRecord[]
+
+  @@unique([seriesId, seriesIndex])
+  @@index([seriesId])
+  @@index([rarity])
+  @@map("box_item")
+}
+
+/// 匿名用户（通过 fingerprint 识别）
+model AnonymousUser {
+  id          String   @id @default(uuid())
+  fingerprint String   @unique
+  ipAddress   String?
+  isBanned    Boolean  @default(false)
+  lastActive  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  drawRecords  DrawRecord[]
+  collections  Collection[]
+  shareRecords ShareRecord[]
+  drawCounters DrawCounter[]
+
+  @@map("anonymous_user")
+}
+
+/// 抽卡记录
+model DrawRecord {
+  id       String   @id @default(uuid())
+  userId   String
+  itemId   String
+  drawDate DateTime @default(now())
+
+  user AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item BoxItem       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([drawDate])
+  @@index([itemId])
+  @@map("draw_record")
+}
+
+/// 用户收藏
+model Collection {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+
+  user AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item BoxItem       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@map("collection")
+}
+
+/// 抽卡计数器（每系列保底计数）
+model DrawCounter {
+  id      String @id @default(uuid())
+  userId  String
+  seriesId String
+  count    Int    @default(0)
+
+  user AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesId])
+  @@index([userId])
+  @@map("draw_counter")
+}
+
+/// 分享记录
+model ShareRecord {
+  id        String   @id @default(uuid())
+  userId    String
+  itemId    String
+  channel   String   @default("unknown")
+  shareDate DateTime @default(now())
+
+  user AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item BoxItem       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([shareDate])
+  @@index([userId])
+  @@map("share_record")
+}
+
+/// 管理员用户
+model AdminUser {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  nickname     String?
+  avatar       String?
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  lastLogin    DateTime?
+
+  @@map("admin_user")
+}

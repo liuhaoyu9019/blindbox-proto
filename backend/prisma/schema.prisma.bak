@@ -1,0 +1,186 @@
+// ─────────────────────────────────────────────
+// 盲盒抽卡应用 - Prisma Schema
+// Database: PostgreSQL
+// ─────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── 枚举 ────────────────────────────────────
+
+/// 稀有度枚举（5级）
+enum Rarity {
+  COMMON    // 普通
+  RARE      // 稀有
+  EPIC      // 史诗
+  LEGENDARY // 传说
+  SECRET    // 隐藏/限定
+}
+
+// ── 模型 ────────────────────────────────────
+
+/// 盲盒系列
+model BoxSeries {
+  id          String    @id @default(uuid())
+  /// 系列名称
+  name        String
+  /// 系列描述
+  description String?
+  /// 封面图片 URL
+  coverImage  String
+  /// 系列包含卡片总数
+  totalItems  Int       @default(0)
+  /// 分类标签（JSON 数组）
+  categories  Json?
+  /// 是否限时系列
+  isLimited   Boolean   @default(false)
+  /// 限时开始日期
+  startDate   DateTime?
+  /// 限时结束日期
+  endDate     DateTime?
+  /// 是否上架
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items BoxItem[]
+
+  @@map("box_series")
+}
+
+/// 盲盒卡片（单品）
+model BoxItem {
+  id          String   @id @default(uuid())
+  /// 所属系列 ID
+  seriesId    String
+  /// 卡片名称
+  name        String
+  /// 卡片图片 URL（管理后台上传）
+  imageUrl    String
+  /// 稀有度
+  rarity      Rarity
+  /// 抽中概率（0~1）
+  probability Float    @default(0)
+  /// 是否限时
+  isLimited   Boolean  @default(false)
+  /// 限时总份数（null 表示不限量）
+  totalLimit  Int?
+  /// 已抽中数量
+  drawnCount  Int      @default(0)
+  /// 排序序号（越小越靠前）
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  series       BoxSeries     @relation(fields: [seriesId], references: [id])
+  drawRecords  DrawRecord[]
+  collections  Collection[]
+  shareRecords ShareRecord[]
+
+  @@index([seriesId])
+  @@index([rarity])
+  @@index([sortOrder])
+  @@map("box_item")
+}
+
+/// 匿名用户
+model AnonymousUser {
+  id          String   @id @default(uuid())
+  /// 浏览器指纹
+  fingerprint String   @unique
+  /// IP 地址
+  ipAddress   String?
+  /// 是否封禁
+  isBanned    Boolean  @default(false)
+  /// 最后活跃时间
+  lastActive  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  drawRecords  DrawRecord[]
+  collections  Collection[]
+  shareRecords ShareRecord[]
+
+  @@map("anonymous_user")
+}
+
+/// 抽卡记录
+model DrawRecord {
+  id       String   @id @default(uuid())
+  /// 用户 ID
+  userId   String
+  /// 卡片 ID
+  itemId   String
+  /// 抽卡时间
+  drawDate DateTime @default(now())
+
+  user AnonymousUser @relation(fields: [userId], references: [id])
+  item BoxItem       @relation(fields: [itemId], references: [id])
+
+  @@index([userId])
+  @@index([drawDate])
+  @@index([itemId])
+  @@map("draw_record")
+}
+
+/// 用户收藏
+model Collection {
+  id        String   @id @default(uuid())
+  /// 用户 ID
+  userId    String
+  /// 卡片 ID
+  itemId    String
+  /// 持有数量（重复卡片计数）
+  count     Int      @default(1)
+  createdAt DateTime @default(now())
+
+  user AnonymousUser @relation(fields: [userId], references: [id])
+  item BoxItem       @relation(fields: [itemId], references: [id])
+
+  @@unique([userId, itemId])
+  @@index([userId])
+  @@map("collection")
+}
+
+/// 分享记录
+model ShareRecord {
+  id        String   @id @default(uuid())
+  /// 用户 ID
+  userId    String
+  /// 卡片 ID
+  itemId    String
+  /// 分享渠道
+  channel   String
+  /// 分享时间
+  shareDate DateTime @default(now())
+
+  user AnonymousUser @relation(fields: [userId], references: [id])
+  item BoxItem       @relation(fields: [itemId], references: [id])
+
+  @@index([shareDate])
+  @@index([userId])
+  @@map("share_record")
+}
+
+/// 管理员用户
+model AdminUser {
+  id           String   @id @default(uuid())
+  /// 登录用户名
+  username     String   @unique
+  /// 密码哈希
+  passwordHash String
+  /// 昵称
+  nickname     String?
+  /// 头像 URL
+  avatar       String?
+  /// 角色（admin / superadmin）
+  role         String   @default("admin")
+  createdAt    DateTime @default(now())
+  /// 最后登录时间
+  lastLogin    DateTime?
+
+  @@map("admin_user")
+}
